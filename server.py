@@ -91,7 +91,9 @@ class UDProtocol(DatagramProtocol, Thread):
         print('%s connected' % repr(address))
         if self.server.handlers.get(address):
             self.disconnect(None, address)
-        self.server.handlers[address] = {'time': time.time(), 'user': User(address, self)}
+        user = User(address, self)
+        user.on_open()
+        self.server.connections[address] = {'time': time.time(), 'user': user}
 
     def disconnect(self, _, address):
         print('%s disconnected' % repr(address))
@@ -124,6 +126,9 @@ class User:
 
     def send(self, data):
         self.udp.send(data, self.addr)
+
+    def on_open(self):
+        """Override"""
 
     def on_message(self, message):
         """Override"""
