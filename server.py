@@ -1,6 +1,6 @@
 from twisted.internet.protocol import DatagramProtocol
 from twisted.python import failure
-from twisted.internet import error
+from twisted.internet import error, task
 from threading import Thread
 import time
 import json
@@ -13,7 +13,7 @@ class Game(Thread):
     tick = 1
 
     def __init__(self, channel):
-        Thread.__init__(self, target=self.run)
+        super().__init__()
         self.channel = channel
 
     def run(self):
@@ -29,7 +29,7 @@ class Game(Thread):
         self.channel.send_all({'time': time.time()})
 
 
-class UDProtocol(DatagramProtocol, Thread):
+class UDProtocol(DatagramProtocol):
     requests = ['connect', 'disconnect', 'ping']
     errors = {'001': 'Bad request', '002': 'Wrong request', '003': 'Connection first'}
 
@@ -37,12 +37,11 @@ class UDProtocol(DatagramProtocol, Thread):
     update = 1/2
 
     def __init__(self, ip, port, r, server):
-        Thread.__init__(self, target=self.run)
         self.ip = ip
         self.port = port
         self.reactor = r
         self.server = server
-        self.start()
+        self.reactor.callLater(0, lambda: task.LoopingCall(self.run).start(self.update))
 
     def datagramReceived(self, datagram, address):
         print("Datagram %s received from %s" % (repr(datagram), repr(address)))
@@ -108,13 +107,10 @@ class UDProtocol(DatagramProtocol, Thread):
         self.server.handlers[address]['time'] = time.time()
 
     def run(self):
-        print('Protocol started')
-        while True:
-            t = time.time()
-            for handler in self.server.handlers.copy().values():
-                if t - handler['time'] > self.timeout:
-                    self.disconnect(None, handler['user'].addr)
-            time.sleep(self.update)
+        t = time.time()
+        for handler in self.server.handlers.copy().values():
+            if t - handler['time'] > self.timeout:
+                self.disconnect(None, handler['user'].addr)
 
 
 class User:
